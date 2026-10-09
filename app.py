@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-st.set_page_config(page_title="Simulador V2 PRO", layout="wide", page_icon="🚗")
+st.set_page_config(page_title="Simulador", layout="wide", page_icon="🚗")
 
 # --- ESTILOS VISUALES V2 PRO ---
 st.markdown("""
