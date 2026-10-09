@@ -1,39 +1,64 @@
 import streamlit as st
 import matplotlib.pyplot as plt
+import numpy as np
 
-st.set_page_config(page_title="Simulador de Refrigeración", layout="wide")
-st.title("🚗 Simulador Interactivo: Sistema de Refrigeración del Motor")
+st.set_page_config(page_title="Simulador V2 Pro", layout="wide", page_icon="🚗")
+st.title("🚗 Simulador V2 PRO: Circuito de Refrigeración")
 
-# Controles laterales
-st.sidebar.header("🕹️ Panel de Control")
-rpm = st.sidebar.slider("Revoluciones por Minuto (RPM)", 800, 6000, 2500, 100)
-temp_inicial = st.sidebar.slider("Temperatura Inicial del Motor (°C)", 20, 110, 65)
-falla_termostato = st.sidebar.checkbox("Termostato trabado (No abre)")
+with st.sidebar:
+    st.header("⚙️ Panel de Control")
+    rpm = st.slider("RPM Motor", 800, 6000, 2500, 100)
+    vel = st.slider("Velocidad Vehículo (km/h)", 0, 120, 40)
+    temp_amb = st.slider("T° Ambiente (°C)", 10, 45, 23)
+    temp_init = st.slider("T° Inicial Motor (°C)", 20, 110, 65)
+    st.divider()
+    st.subheader("🔧 Modo Fallas")
+    falla_term = st.toggle("Termostato trabado cerrado")
+    falla_vent = st.toggle("Electroventilador no funciona")
+    rad_tapado = st.slider("Radiador tapado %", 0, 100, 0)
+    bajo_ref = st.toggle("Nivel bajo refrigerante")
 
-# Lógica matemática rápida
-temperaturas = [temp_inicial]
-tiempos = list(range(0, 61, 2))
-temp_actual = temp_inicial
+dt=1; t_max=300; steps=int(t_max/dt)
+temps=[]; aperturas=[]; t_motor=temp_init
+for i in range(steps):
+    calor=(rpm/1000)*4.5+2.0; caudal=(rpm/6000)
+    if bajo_ref: caudal*=0.3
+    if falla_term: apertura=0.0
+    else:
+        if t_motor<82: apertura=0.0
+        elif t_motor>92: apertura=1.0
+        else: apertura=(t_motor-82)/10
+    flujo_aire=(vel/120)*6+1.5
+    if t_motor>95 and not falla_vent: flujo_aire+=4.0
+    eficiencia_rad=8.0*(1-rad_tapado/100)
+    disipado=eficiencia_rad*caudal*apertura*(flujo_aire/10)*((t_motor-temp_amb)/60+0.5)
+    t_motor+=(calor-disipado)*0.12
+    t_motor=max(20,min(130,t_motor))
+    temps.append(t_motor); aperturas.append(apertura*100)
+    if t_motor>=129: break
 
-for _ in range(len(tiempos) - 1):
-    calor_motor = rpm * 0.06
-    apertura_termostato = 0.0 if falla_termostato or temp_actual < 80 else (1.0 if temp_actual > 90 else (temp_actual - 80) / 10.0)
-    eficiencia = 0.8 * apertura_termostato
-    if temp_actual >= 95 and not falla_termostato: eficiencia += 0.4
-    
-    cambio_temp = (calor_motor - (temp_actual * efficiency * (rpm / 1000.0))) / 150.0 if 'efficiency' in locals() else (calor_motor - (temp_actual * eficiencia * (rpm / 1000.0))) / 150.0
-    temp_actual += cambio_temp
-    temperaturas.append(round(temp_actual, 2))
+k1,k2,k3,k4=st.columns(4)
+k1.metric("T° Final Motor", f"{temps[-1]:.2f} °C")
+k2.metric("Termostato", f"{aperturas[-1]:.0f}% abierto")
+k3.metric("Flujo Aire", f"{flujo_aire:.1f} m/s")
+estado="🔥 SOBRECALENTADO" if temps[-1]>105 else "✅ ÓPTIMO" if temps[-1]<98 else "⚠️ ALTO"
+k4.metric("Estado", estado)
 
-# Indicadores en pantalla
-col1, col2 = st.columns(2)
-with col1:
-    st.metric(label="Temperatura Final del Motor", value=f"{temperaturas[-1]} °C")
-with col2:
-    st.metric(label="Estado del Termostato", value="❌ TRABADO" if falla_termostato else f"{int(apertura_termostato*100)}% Abierto")
+fig,ax=plt.subplots(figsize=(12,4))
+t=np.linspace(0,len(temps),len(temps))
+ax.plot(t,temps,linewidth=3,label="Temp Motor")
+ax.axhline(82,color="blue",ls="--",alpha=0.7,label="Abre termostato 82°C")
+ax.axhline(95,color="orange",ls="--",alpha=0.7,label="Prende ventilador 95°C")
+ax.axhline(105,color="red",ls="--",alpha=0.7,label="Peligro 105°C")
+ax.set_xlabel("Tiempo (s)"); ax.set_ylabel("°C")
+ax.legend(); ax.grid(True,alpha=0.3)
+st.pyplot(fig,use_container_width=True)
 
-# Gráfica
-fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(tiempos, temperaturas, color="red" if temperaturas[-1] >= 100 else "cyan", linewidth=2.5, marker="o")
-ax.grid(True, linestyle=":")
-st.pyplot(fig)
+if temps[-1]>105:
+    if falla_term: st.error("🔴 DIAGNÓSTICO: Termostato trabado cerrado.")
+    elif rad_tapado>60: st.error(f"🔴 DIAGNÓSTICO: Radiador {rad_tapado}% obstruido.")
+    elif falla_vent and vel<30: st.error("🔴 DIAGNÓSTICO: Sin ventilador + tráfico.")
+    elif bajo_ref: st.error("🔴 DIAGNÓSTICO: Nivel bajo refrigerante.")
+    else: st.error("🔴 DIAGNÓSTICO: Sobrecarga por alta RPM sostenida.")
+elif temps[-1]>98: st.warning("🟡 Temperatura alta pero controlada.")
+else: st.success("🟢 Sistema regulando correctamente.")
