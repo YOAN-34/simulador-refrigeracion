@@ -23,7 +23,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🚗 Simulador V2 PRO: Circuito de Refrigeración")
+st.title("🚗 Simulador: Circuito de Refrigeración")
 
 # --- CONTROLES ---
 with st.sidebar:
